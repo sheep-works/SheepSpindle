@@ -1,0 +1,13 @@
+node_modules
+
+# Rust ビルド生成物
+/target/
+**/*.rs.bk
+
+# ログファイル
+npm-debug.log*
+
+# エディタ設定
+.vscode/
+
+# git submodule で使用するため、pkgは除外しない

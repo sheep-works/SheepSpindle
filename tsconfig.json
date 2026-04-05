@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "node", // または "nodenext"
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "allowJs": true,
+    "outDir": "./dist"
+  },
+  "ts-node": {
+    "esm": true,
+    "experimentalSpecifierResolution": "node"
+  }
+}
