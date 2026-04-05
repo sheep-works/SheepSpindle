@@ -6,64 +6,104 @@ use serde::Serialize;
 // JS側に返す解析結果の構造体
 #[derive(Serialize)]
 pub struct AnalysisResult {
-    pub tm_indices: Vec<u32>,   // 類似する翻訳メモリ(TM)のインデックス
-    pub prev_indices: Vec<u32>, // 現在のテキスト(Texts)内での前方一致インデックス
-    pub tb_indices: Vec<u32>,   // ヒットした用語集(TB)のインデックス
+    pub t: Vec<u32>, // Translation Memory：類似する翻訳メモリ(TM)のインデックス
+    pub i: Vec<u32>, // Internal Similarity：現在のテキスト(Texts)内での前方一致インデックス
+    pub g: Vec<u32>, // Glossary：ヒットした用語集(TB)のインデックス
 }
 
+// --- [内部用] 類似度探索のロジック (JSからは直接見えない) ---
+fn internal_tm_search(current: &str, tm_list: &[String], threshold: f64) -> Vec<u32> {
+    let current_bytes = current.as_bytes();
+    tm_list.iter().enumerate()
+        .filter(|(_, entry)| {
+            levenshtein::normalized_similarity(current_bytes, entry.as_bytes()) >= threshold
+        })
+        .map(|(idx, _)| idx as u32)
+        .collect()
+}
+
+// --- [内部用] 用語抽出のロジック ---
+fn internal_tb_search(current: &str, ac: &AhoCorasick) -> Vec<u32> {
+    let mut hits: Vec<u32> = ac.find_iter(current)
+        .map(|mat| mat.pattern().as_u32())
+        .collect();
+    hits.sort_unstable();
+    hits.dedup();
+    hits
+}
+
+// ==========================================
+//   ここから JS (Wasm) 用の公開インターフェース
+// ==========================================
+
+// 1. [単体] 類似度だけ調べたい時用
 #[wasm_bindgen]
-pub fn analyze_text(tm: JsValue, texts: JsValue, tb: JsValue, threshold: f64) -> JsValue {
+pub fn only_tm_search(tm: JsValue, texts: JsValue, threshold: f64) -> JsValue {
     // 1. JSからのデータをRustの型に変換（シリアライズ）
+    let tm_list: Vec<String> = serde_wasm_bindgen::from_value(tm).unwrap();
+    let text_list: Vec<String> = serde_wasm_bindgen::from_value(texts).unwrap();
+    
+    let results: Vec<Vec<u32>> = text_list.iter()
+        .map(|txt| internal_tm_search(txt, &tm_list, threshold))
+        .collect();
+        
+    serde_wasm_bindgen::to_value(&results).unwrap()
+}
+
+// 2. [単体] 用語抽出だけしたい時用
+#[wasm_bindgen]
+pub fn only_tb_search(texts: JsValue, tb: JsValue) -> JsValue {
+    let text_list: Vec<String> = serde_wasm_bindgen::from_value(texts).unwrap();
+    let tb_list: Vec<String> = serde_wasm_bindgen::from_value(tb).unwrap();
+    let ac = AhoCorasick::new(&tb_list).unwrap();
+
+    let results: Vec<Vec<u32>> = text_list.iter()
+        .map(|txt| internal_tb_search(txt, &ac))
+        .collect();
+
+    serde_wasm_bindgen::to_value(&results).unwrap()
+}
+
+// 3. [全部盛り] これまでの analyze_text
+#[wasm_bindgen]
+pub fn analyze_all(tm: JsValue, texts: JsValue, tb: JsValue, threshold: f64) -> JsValue {
+    // 1. JSからのデータ (JsValue) をRustの型 (Vec<String>) に変換（シリアライズ）
+    // serde_wasm_bindgen を使うことで、JS配列をRustのVecへ簡単にマッピングできます。
     let tm_list: Vec<String> = serde_wasm_bindgen::from_value(tm).unwrap();
     let text_list: Vec<String> = serde_wasm_bindgen::from_value(texts).unwrap();
     let tb_list: Vec<String> = serde_wasm_bindgen::from_value(tb).unwrap();
 
-    // 2. TB（用語集）検索用の「Aho-Corasick」検索機をビルド
-    // この一行で、全用語を一度にスキャンできる「木構造」が作られます
-    let ac = AhoCorasick::new(&tb_list).expect("TB検索機の作成に失敗しました");
+    // 2. 用語集(TB)検索用の AhoCorasick インスタンスを作成
+    // 固定されたキーワード群に対して高速にマルチパターンマッチングを行うための前準備です。
+    let ac = AhoCorasick::new(&tb_list).unwrap();
 
-    let mut final_results = Vec::with_capacity(text_list.len());
+    // 3. 各テキストに対して解析を実行
+    // iter().enumerate() を使うことで、要素 (txt) と同時にそのインデックス (i) を取得できます。
+    let results: Vec<AnalysisResult> = text_list.iter().enumerate()
+        .map(|(i, txt)| {
+            // 内部関数を呼び出して、現在のテキストに対する解析ロジックを実行
+            let tm_hits = internal_tm_search(txt, &tm_list, threshold);
+            let tb_hits = internal_tb_search(txt, &ac);
 
-    // 各文（texts）に対してループ処理
-    for i in 0..text_list.len() {
-        let current_str = &text_list[i];
-        let current_bytes = current_str.as_bytes(); // 比較高速化のためバイト列へ
+            // 前方一致（ファイル内重複）のチェック
+            // 自分より前の位置にあるテキストを走査して、類似度がしきい値以上のものを抽出します。
+            let prev_hits: Vec<u32> = text_list[0..i].iter().enumerate()
+                .filter(|(_, prev_txt)| {
+                    let current_bytes = txt.as_bytes();
+                    levenshtein::normalized_similarity(current_bytes, prev_txt.as_bytes()) >= threshold
+                })
+                .map(|(prev_idx, _)| prev_idx as u32)
+                .collect();
 
-        // --- A. TM（翻訳メモリ）との全件比較 ---
-        // Levenshtein距離でしきい値を超えるものだけインデックスを残す
-        let tm_indices: Vec<u32> = tm_list.iter().enumerate()
-            .filter(|(_, entry)| {
-                levenshtein::normalized_similarity(current_bytes, entry.as_bytes()) >= threshold
-            })
-            .map(|(idx, _)| idx as u32)
-            .collect();
+            // 最終的な解析結果を構造体に詰めて返します。
+            AnalysisResult {
+                t: tm_hits,
+                i: prev_hits,
+                g: tb_hits,
+            }
+        })
+        .collect(); // mapの結果(イテレータ)をVecにまとめます
 
-        // --- B. 同じファイル内の「自分より前の文」との比較 ---
-        let prev_indices: Vec<u32> = (0..i)
-            .filter(|&j| {
-                levenshtein::normalized_similarity(current_bytes, text_list[j].as_bytes()) >= threshold
-            })
-            .map(|j| j as u32)
-            .collect();
-
-        // --- C. TB（用語集）の抽出 ---
-        // テキストを一回なぞるだけで、登録用語をすべて見つける（AC法）
-        let mut tb_indices: Vec<u32> = ac.find_iter(current_str)
-            .map(|mat| mat.pattern().as_u32()) // 見つかった用語のインデックスを取得
-            .collect();
-        
-        // 重複ヒット（同じ単語が2回出た場合など）を整理
-        tb_indices.sort_unstable();
-        tb_indices.dedup();
-
-        // 3. 結果をまとめてリストに追加
-        final_results.push(AnalysisResult {
-            tm_indices,
-            prev_indices,
-            tb_indices,
-        });
-    }
-
-    // 4. 全結果をJSが理解できる形式に変換して返却
-    serde_wasm_bindgen::to_value(&final_results).unwrap()
+    // 4. 解析結果 (Vec<AnalysisResult>) を JS が扱える JsValue に変換して返却
+    serde_wasm_bindgen::to_value(&results).unwrap()
 }

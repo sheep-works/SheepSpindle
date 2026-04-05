@@ -1,3 +1,7 @@
+# SheepSpindle
+
+翻訳作業で欠かせない TM/TB の適用や全体 QA 作業を Rust ＆ WASM の力で高速化するプロジェクトです
+
 # Rust ファイルのビルド
 
 ## 対象
@@ -16,13 +20,13 @@ wasm-pack build --target nodejs
 
 ```ts
 // pkgの中に生成されたJSをインポート
-import { search_hybrid } from './pkg/rust_tm_engine';
+import { search_hybrid } from './pkg/sheep_spindle';
 ```
 
 または
 
 ```js
-const { find_similar_pairs } = require('./pkg/rust_tm_engine');
+const { find_similar_pairs } = require('./pkg/sheep_spindle');
 ```
 
 ## 実行

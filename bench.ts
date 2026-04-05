@@ -1,10 +1,10 @@
-import { analyze_text } from './pkg/rust_tm_engine.js';
+import { analyze_all } from './pkg/sheep_spindle.js';
 
 // Rustから返ってくるデータの型定義
 interface AnalysisResult {
-    tm_indices: number[];
-    prev_indices: number[];
-    tb_indices: number[];
+    t: number[]; // Translation Memory
+    i: number[]; // Internal duplication
+    g: number[]; // Glossary
 }
 
 // 実際のデータを模したテストセット
@@ -29,7 +29,7 @@ console.log("--- Rust Analysis Engine Test ---");
 const startTime = performance.now();
 
 // Rustエンジンの実行（しきい値 0.6）
-const results: AnalysisResult[] = analyze_text(tm, texts, tb, 0.6);
+const results: AnalysisResult[] = analyze_all(tm, texts, tb, 0.6);
 
 const endTime = performance.now();
 console.log(`Processing Time: ${(endTime - startTime).toFixed(3)}ms\n`);
@@ -39,22 +39,22 @@ results.forEach((res, i) => {
     console.log(`[Text ${i}] "${texts[i]}"`);
 
     // TM一致の表示
-    if (res.tm_indices.length > 0) {
-        res.tm_indices.forEach(idx => {
+    if (res.t.length > 0) {
+        res.t.forEach(idx => {
             console.log(`  -> 💡 TMマッチ [${idx}]: "${tm[idx]}"`);
         });
     }
 
     // ファイル内重複（前方一致）の表示
-    if (res.prev_indices.length > 0) {
-        res.prev_indices.forEach(idx => {
+    if (res.i.length > 0) {
+        res.i.forEach(idx => {
             console.log(`  -> ⚠️ 前方一致 [Text ${idx}]: "${texts[idx]}"`);
         });
     }
 
     // 用語ヒットの表示
-    if (res.tb_indices.length > 0) {
-        const hits = res.tb_indices.map(idx => tb[idx]).join(", ");
+    if (res.g.length > 0) {
+        const hits = res.g.map(idx => tb[idx]).join(", ");
         console.log(`  -> 📘 用語検出: ${hits}`);
     }
 });

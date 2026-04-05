@@ -128,19 +128,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "270e04e5ea61d40841942bb15e451c29ee1618637bcf97fc7ede5dd4a9b1601b"
 
 [[package]]
-name = "rust-tm-engine"
-version = "0.1.0"
-dependencies = [
- "aho-corasick",
- "getrandom",
- "rand",
- "rapidfuzz",
- "serde",
- "serde-wasm-bindgen",
- "wasm-bindgen",
-]
-
-[[package]]
 name = "rustversion"
 version = "1.0.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -185,6 +172,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "sheep-spindle"
+version = "0.1.0"
+dependencies = [
+ "aho-corasick",
+ "getrandom",
+ "rand",
+ "rapidfuzz",
+ "serde",
+ "serde-wasm-bindgen",
+ "wasm-bindgen",
 ]
 
 [[package]]
