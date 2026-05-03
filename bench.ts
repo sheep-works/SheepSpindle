@@ -28,19 +28,15 @@ const tm = [
 ];
 
 const tb = [
-    "document", // TB Index 0
-    "system",   // TB Index 1
-    "updated",   // TB Index 2
-    "0 apples"
+    "人間", // TB Index 0
+    "羊",   // TB Index 1
+    "天才",   // TB Index 2
 ];
 
 const texts = [
-    "The document is updated.",          // Text 0: TM[0]と類似、TB[0,2]を含む
-    "Check system settings please.",      // Text 1: TM[1]と類似、TB[1]を含む
-    "The document is updated.",           // Text 2: Text[0]と重複、TB[0,2]を含む
-    "1000000 apples",
-    "10000000 apples",
-    "100000000 apples",
+    "人間は羊である。",          // Text 0: TM[0]と類似、TB[0,2]を含む
+    "羊は天才である。",      // Text 1: TM[1]と類似、TB[1]を含む
+    "すなわち人間は天才である。",           // Text 2: Text[0]と重複、TB[0,2]を含む
 ];
 
 console.log("--- Rust Analysis Engine Test ---");

@@ -10,4 +10,8 @@ npm-debug.log*
 # エディタ設定
 .vscode/
 
+# 実験用
+test/
+sample/
+
 # git submodule で使用するため、pkgは除外しない
